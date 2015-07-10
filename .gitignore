@@ -1,0 +1,11 @@
+# Python compiled files #
+#########################
+*.pyc
+
+# Temporary files #
+###################
+*.swp
+
+# Junk
+###################
+*~
