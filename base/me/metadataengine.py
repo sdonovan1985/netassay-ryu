@@ -60,6 +60,8 @@ class MetadataEngine(object):
         """
         This kicks off the new rule process that is handled by MetadataEntries.
         See their definition below.
+        The rule parameter is simply for tracking. It is not used in this 
+        version.
         """
         self.logger.info("new_rule(): called")
         #TODO
@@ -87,5 +89,11 @@ class MetadataEntry(object):
         self.engine = engine
         self.rule = rule
 
-        
+        # These callbacks are used when new rules need to be added
+        self.add_rule_cb = None
+        self.remove_rule_cb = None
+
+    def register_callbacks(self, add_rule_cb, remove_rule_cb):
+        self.add_rule_cb = add_rule_cb
+        self.remove_rule_cb = remove_rule_cb
     

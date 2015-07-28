@@ -137,8 +137,7 @@ class NetAssayMatchAction(Object):
                                       str(self.postmatch))
         self.table = self.mcm.get_table()
 
-#TODO: Creating the Rule - ME.new_rule(rule)
-#TODO: Make it a single ME for now.
+#TODO: Single ME now. Need changes to handle multiple MEs for a single NAMA
         # Create the new rule with the ME.
 #        self.MEs = self._get_MEs()
 #        self.MErules = self._create_ME_rules()
@@ -146,8 +145,8 @@ class NetAssayMatchAction(Object):
         # FOR A SINGLE RULE ONLY
         rma = RegisteredMatchActions()
         self.ME = rma.lookup(self.match.keys()[1])
-        self.MErule = self.ME.new_rule(self)
-        self.ME.
+        self.MErule = self.ME.new_rule(self.match[self.match.keys()[1]])
+        self.MErule.register_callbacks(self.add_rule, self.remove_rule)
 
     def _get_MEs(self):
         me_list = []
@@ -158,47 +157,41 @@ class NetAssayMatchAction(Object):
         return me_list
 
     def _create_ME_rules(self):
-        #TODO - For each ME, create rule that they're responsible for.
+        #TODO: For each ME, create rule that they're responsible for.
+        pass
     
     def _register_with_MEs(self):
+        #TODO: for multiple MEs in a single NAMA. Not used right now.
         for me in self.MEs:
             me.register_update_callback(self.update_callback)
 
-
-    def update_callback(self, new_or_remove, matchval):
-        # new_or_remove is True if new, False if remove
-
-        #TODO - From the callback, push new rules if necessary.
-
-        # If already exists
-        if matchval in self.trackers.keys():
-            # Adding another instance
-            if new_or_remove == True:
-                self.trackers[matchval].count += 1
-                return
-            # Remove one instance
-            if self.trackers[matchval] > 1:
-                self.trackers[matchval] -= 1
-                return
-
-            # Remove last instance
-            to_remove = self.trackers[matchval]
-            del self.trackers[matchval]
-            
-            self.remove_match(to_remove)
-        
-        # Brand new
-        if new_or_remove == True:
+    def add_rule(self, matchval):
+        # If it already exists, just increment count. No need to install
+        # a new OF rule.
+        if matchval in self.trackers.keys:
+            self.trackers[matchval].count += 1
+        else:
             to_install = self.create_match_tracking(matchval)
             self.install_match(to_install)
-        # Removing one that doesn't exist: throw error
+            self.trackers[matchval] = to_install
+
+
+    def remove_rule(self, matchval):
+        # Make sure it exists
+        if matchval in self.trackers.keys:
+            # If there are multiple instances of the same rule, slightly
+            # different behaviour. No need to remove the OF rule.
+            if self.trackers[matchval].count > 1:
+                self.trackers[matchval].count -= 1
+            else:
+                to_remove = self.trackers[matchval]
+                del self.trackers[matchval]
+                self.remove_match(to_remove)
         else:
             raise MainControlModuleException(
                 "Trying to remove one that doesn't exists:\n    " +
                 str(matchval))
-        
 
-        
     def create_match_tracking(self, match_string):
         cookie = self.mcm.get_cookie()
         #TODO: Create subaction (fwd to next table)
@@ -212,9 +205,13 @@ class NetAssayMatchAction(Object):
                               self.vmac)
     
     def install_match(self, tracker):
+        # This function handle installation of OF rules.
         #TODO - This installs OF rules
         pass
 
     def remove_match(self, tracker):
+        # This function removes OF rules.
         #TODO - This removes OF rules
         pass
+
+
