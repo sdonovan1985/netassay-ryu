@@ -40,7 +40,7 @@ class NetAssayMCM(object):
         self.vmac_table = {}
         self.current_vmac = EUI("02:00:00:00:00:01") 
 
-        # Set up table
+        # Setup table
         self.table = table
         #TODO: anything else?
         
@@ -94,7 +94,6 @@ class NetAssayMCM(object):
     def get_table(self):
         return self.table
         
-    
     def register_NAMA(self, nama):
         self.match_actions.append(nama)
 
@@ -120,7 +119,7 @@ class NetAssayMatchAction(Object):
     #    Could use multiple tables chained together for AND
     #    OR is simpler: same table, more entries.
     #TODO: Make match and postmatch easier to use
-    def __init__(self, match, action, priority=1, postmatch=None):
+    def __init__(self, datapah, match, action, priority=1, postmatch=None):
         self.match = match
         self.action = action
         self.postmatch = postmatch
@@ -136,6 +135,7 @@ class NetAssayMatchAction(Object):
         self.vmac = self.mcm.get_vmac(str(self.match) + 
                                       str(self.postmatch))
         self.table = self.mcm.get_table()
+        self.datapath = datapath
 
 #TODO: Single ME now. Need changes to handle multiple MEs for a single NAMA
         # Create the new rule with the ME.
@@ -206,12 +206,59 @@ class NetAssayMatchAction(Object):
     
     def install_match(self, tracker):
         # This function handle installation of OF rules.
-        #TODO - This installs OF rules
-        pass
+        ofproto = self.datapath.ofproto
+        parser = self.datapath.ofproto_parser
+
+        match = tracker.submatch
+        actions = tracker.subactions
+        cookie = tracker.cookie
+        buffer_id = None
+
+        #TODO: Should these be in the match_tracking class?
+        priority = self.priority
+        table = self.table
+        
+
+        # Push actions
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
+                                             actions)]
+
+        print "Adding flow : switch  " + str(datapath.id)
+        print "            : match   " + str(match)
+        print "            : actions " + str(actions)
+
+        if buffer_id:
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
+                                    priority=priority, match=match,
+                                    instructions=inst, table_id=table)
+        else:
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
+                                    match=match, instructions=inst, 
+                                    table_id=table)
+
+        datapath.send_msg(mod)
+        
 
     def remove_match(self, tracker):
         # This function removes OF rules.
-        #TODO - This removes OF rules
-        pass
+        ofproto = self.datapath.ofproto
+        parser = self.datapath.ofproto_parser
 
+        match = tracker.submatch
+        actions = tracker.subactions
+        cookie = tracker.cookie
+        buffer_id = None
 
+        #TODO: Should this be in the match_tracking class?
+        table = self.table
+
+        print "Removing flow : switch  " + str(datapath.id)
+        print "              : match   " + str(match)
+        print "              : actions " + str(actions)
+
+        mod = parser.OFPFlowMod(datapath=datapath, cookie=cookie, 
+                                table_id=table, command=ofproto_v1_3.OFPFC_DELETE,
+                                out_group=ofproto_v1_3.OFPG_ANY, 
+                                out_port=ofproto_v1_3.OFPP_ANY, 
+                                match=match)
+        datapath.send_msg(mod)
