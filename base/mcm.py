@@ -194,8 +194,9 @@ class NetAssayMatchAction(Object):
 
     def create_match_tracking(self, match_string):
         cookie = self.mcm.get_cookie()
-        #TODO: Create subaction (fwd to next table)
-        subaction = 1 
+
+        parser = self.datapath.ofproto_parser
+        subaction = [parser.OFPInstructionGotoTable(self.table)]
         
         return match_tracking(match_string,
                               self.postmatch,
