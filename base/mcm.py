@@ -8,9 +8,11 @@
 import logging
 
 from RegisteredMatchActions import *
-from match-tracking import *
-from Singleton import Singleton
+from match_tracking import *
+from singleton import Singleton
 from netaddr import EUI
+
+from ryu.lib import mac as mac_lib
 
 DEFAULT_TABLE = 2
 
@@ -84,7 +86,7 @@ class NetAssayMCM(object):
     #    NAMA(domain='example.com') AND match(srcip=1.2.3.4) >> fwd(3)
     #I think just the match is fine as the hash because of this.
     def get_vmac(self, hashval):
-        if hashval is in self.vmac_table.keys():
+        if hashval in self.vmac_table.keys():
             return self.vmac_table[hashval]
         self.current_vmac = EUI(int(self.current_vmac) + 1)
         self.vmac_table[hashval] = self.current_vmac
@@ -105,7 +107,7 @@ class NetAssayMCM(object):
 # Definition of the NetAssayMatchAction (NAMA).
 # This is used by users of NetAssay. Based on 
 # https://github.com/sdonovan1985/netassay/blob/master/pyretic/modules/netassay/netassaymatch.py
-class NetAssayMatchAction(Object):
+class NetAssayMatchAction(object):
     
     # match is a one entry dictionary - needs to be for now - may be fancier in
     #    the future
@@ -119,7 +121,7 @@ class NetAssayMatchAction(Object):
     #    Could use multiple tables chained together for AND
     #    OR is simpler: same table, more entries.
     #TODO: Make match and postmatch easier to use
-    def __init__(self, datapah, match, action, priority=1, postmatch=None):
+    def __init__(self, datapath, match, action, priority=1, table=0, postmatch=None):
         self.match = match
         self.action = action
         self.postmatch = postmatch
@@ -134,8 +136,13 @@ class NetAssayMatchAction(Object):
         self.mcm.register_NAMA(self)
         self.vmac = self.mcm.get_vmac(str(self.match) + 
                                       str(self.postmatch))
-        self.table = self.mcm.get_table()
+        self.mcmtable = self.mcm.get_table()
+        self.subtable = table
         self.datapath = datapath
+        self.cookie = self.mcm.get_cookie()
+
+        # Install rule in MCM's table for future action
+        self.install_mcm_table_match()
 
 #TODO: Single ME now. Need changes to handle multiple MEs for a single NAMA
         # Create the new rule with the ME.
@@ -144,9 +151,14 @@ class NetAssayMatchAction(Object):
 #        self._register_with_MEs()
         # FOR A SINGLE RULE ONLY
         rma = RegisteredMatchActions()
-        self.ME = rma.lookup(self.match.keys()[1])
-        self.MErule = self.ME.new_rule(self.match[self.match.keys()[1]])
-        self.MErule.register_callbacks(self.add_rule, self.remove_rule)
+        self.ME = rma.lookup(self.match.keys()[0])
+        self.MErule = self.ME.new_rule(self.match[self.match.keys()[0]],
+                                       self.add_rule, self.remove_rule)
+#        self.MErule.register_callbacks(self.add_rule, self.remove_rule)
+
+    def __del__(self):
+        #TODO - This should clean up all the rules associated. 
+        pass
 
     def _get_MEs(self):
         me_list = []
@@ -168,24 +180,26 @@ class NetAssayMatchAction(Object):
     def add_rule(self, matchval):
         # If it already exists, just increment count. No need to install
         # a new OF rule.
-        if matchval in self.trackers.keys:
-            self.trackers[matchval].count += 1
+        strval = str(matchval)
+        if strval in self.trackers.keys():
+            self.trackers[strval].count += 1
         else:
             to_install = self.create_match_tracking(matchval)
             self.install_match(to_install)
-            self.trackers[matchval] = to_install
+            self.trackers[strval] = to_install
 
 
     def remove_rule(self, matchval):
         # Make sure it exists
-        if matchval in self.trackers.keys:
+        strval = str(matchval)
+        if strval in self.trackers.keys:
             # If there are multiple instances of the same rule, slightly
             # different behaviour. No need to remove the OF rule.
-            if self.trackers[matchval].count > 1:
-                self.trackers[matchval].count -= 1
+            if self.trackers[strval].count > 1:
+                self.trackers[strval].count -= 1
             else:
-                to_remove = self.trackers[matchval]
-                del self.trackers[matchval]
+                to_remove = self.trackers[strval]
+                del self.trackers[strval]
                 self.remove_match(to_remove)
         else:
             raise MainControlModuleException(
@@ -196,7 +210,7 @@ class NetAssayMatchAction(Object):
         cookie = self.mcm.get_cookie()
 
         parser = self.datapath.ofproto_parser
-        subaction = [parser.OFPInstructionGotoTable(self.table)]
+        subaction = [parser.OFPActionSetField(eth_dst=int(self.vmac))]
         
         return match_tracking(match_string,
                               self.postmatch,
@@ -207,22 +221,28 @@ class NetAssayMatchAction(Object):
     
     def install_match(self, tracker):
         # This function handle installation of OF rules.
+        datapath = self.datapath
         ofproto = self.datapath.ofproto
         parser = self.datapath.ofproto_parser
 
-        match = tracker.submatch
+        match = parser.OFPMatch(tracker.submatch)
         actions = tracker.subactions
         cookie = tracker.cookie
         buffer_id = None
 
         #TODO: Should these be in the match_tracking class?
         priority = self.priority
-        table = self.table
+        table = self.subtable
         
 
         # Push actions
+        for a in actions:
+            print str(a) + " " + str(type(a))
+        
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
                                              actions)]
+        inst.append(parser.OFPInstructionGotoTable(self.subtable))
+
 
         print "Adding flow : switch  " + str(datapath.id)
         print "            : match   " + str(match)
@@ -251,7 +271,68 @@ class NetAssayMatchAction(Object):
         buffer_id = None
 
         #TODO: Should this be in the match_tracking class?
-        table = self.table
+        table = self.subtable
+
+        print "Removing flow : switch  " + str(datapath.id)
+        print "              : match   " + str(match)
+        print "              : actions " + str(actions)
+
+        mod = parser.OFPFlowMod(datapath=datapath, cookie=cookie, 
+                                table_id=table, command=ofproto_v1_3.OFPFC_DELETE,
+                                out_group=ofproto_v1_3.OFPG_ANY, 
+                                out_port=ofproto_v1_3.OFPP_ANY, 
+                                match=match)
+        datapath.send_msg(mod)
+
+
+    def install_mcm_table_match(self):
+        # This function handle installation of OF rules.
+        datapath = self.datapath
+        ofproto = self.datapath.ofproto
+        parser = self.datapath.ofproto_parser
+
+        match = parser.OFPMatch(eth_dst=self.vmac)
+        actions = self.action
+        cookie = self.cookie
+        buffer_id = None
+
+        #TODO: Should these be in the match_tracking class?
+        priority = self.priority
+        table = self.mcmtable
+        
+
+        # Push actions
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
+                                             actions)]
+
+        print "Adding flow : switch  " + str(datapath.id)
+        print "            : match   " + str(match)
+        print "            : actions " + str(actions)
+
+        if buffer_id:
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
+                                    priority=priority, match=match,
+                                    instructions=inst, table_id=table)
+        else:
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
+                                    match=match, instructions=inst, 
+                                    table_id=table)
+
+        datapath.send_msg(mod)
+        
+
+    def remove_mcm_table_match(self):
+        # This function removes OF rules.
+        ofproto = self.datapath.ofproto
+        parser = self.datapath.ofproto_parser
+
+        match = self.match
+        actions = self.actions
+        cookie = self.cookie
+        buffer_id = None
+
+        #TODO: Should this be in the match_tracking class?
+        table = self.mcmtable
 
         print "Removing flow : switch  " + str(datapath.id)
         print "              : match   " + str(match)

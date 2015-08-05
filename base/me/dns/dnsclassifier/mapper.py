@@ -17,7 +17,7 @@ class Mapper:
       self.mode='OTHER'
       MapperException("Select REGEX mode. No other mode available")
 
-    self.loadTypeFiles()
+#    self.loadTypeFiles()
 
   def loadTypeFiles(self):
     self.loadFile('pyretic/modules/netassay/me/dns/dnsclassifier/servicedef/adverts.ini', 'ADVERT')

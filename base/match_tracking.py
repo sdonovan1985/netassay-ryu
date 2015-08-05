@@ -9,7 +9,7 @@
 # a structure holding all of the properties.
 
 
-class match_tracking(Object):
+class match_tracking(object):
     
     def __init__(self, submatch, postmatch, cookie, subactions, parent, vmac):
         self.submatch = submatch
@@ -22,7 +22,7 @@ class match_tracking(Object):
 
 
 
-class match_tracking_collection(Object):
+class match_tracking_collection(object):
     #TODO: Make this a Python collection?
 
     def __init__(self):

@@ -2,10 +2,10 @@
 # Based off of https://github.com/shahifaqeer/dnsclassifier. Modified
 # to work with Pyretic.
 
-from ryu.lib.packet.dns import dns
+from ryu.lib.packet import dns
 from ryu.lib import addrconv
 from mapper import Mapper
-from pyretic.modules.netassay.me.dns.dnsentry import DNSClassifierEntry as Entry
+from base.me.dns.dnsentry import DNSClassifierEntry as Entry
 
 # need hooks for passing in DNS packets
 #    Parsing out different types

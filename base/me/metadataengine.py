@@ -9,7 +9,7 @@
 # Based on the Pyretic-based NetAssay, updated for NetAssay-ryu project.
 
 import logging
-from singleton import Singleton
+from base.singleton import Singleton
 
 
 class MetadataEngineException(Exception):
@@ -56,7 +56,7 @@ class MetadataEngine(object):
         self.logger.info("get_forwarding_rules(): called")
         return identity
 
-    def new_rule(self, rule):
+    def new_rule(self, rule, add_rule_cb, remove_rule_cb):
         """
         This kicks off the new rule process that is handled by MetadataEntries.
         See their definition below.
@@ -65,7 +65,8 @@ class MetadataEngine(object):
         """
         self.logger.info("new_rule(): called")
         #TODO
-        self.entries.append(self.entry_type(self.data_source, self, rule))
+        self.entries.append(self.entry_type(self.data_source, self, rule,
+        add_rule_cb, remove_rule_cb))
 
 
 
