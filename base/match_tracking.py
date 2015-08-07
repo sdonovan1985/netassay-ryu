@@ -19,6 +19,7 @@ class match_tracking(object):
         self.parent = parent
         self.vmac = vmac
         self.count = 1
+        self.ofpmatch = None
 
 
 

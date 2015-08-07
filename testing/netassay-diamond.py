@@ -43,21 +43,22 @@ class Diamond(app_manager.RyuApp):
         if(datapath.id == 3 or datapath.id == 4):
             match = parser.OFPMatch()
             actions = [parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
-            self.add_flow(datapath, 0, match, actions)
+            self.add_flow(datapath, 10, match, actions)
         elif(datapath.id == 2 or datapath.id == 1):
             match = parser.OFPMatch(in_port=1)
             actions = [parser.OFPActionOutput(3)]
-            self.add_flow(datapath, 0, match, actions)
+            self.add_flow(datapath, 10, match, actions)
 
             match = parser.OFPMatch(in_port=2)
             actions = [parser.OFPActionOutput(3)]
-            self.add_flow(datapath, 0, match, actions)
+            self.add_flow(datapath, 10, match, actions)
 
             match = {'domain':"google.com"}
+#            match = {'domain':"core5usw2.fabrik.nytimes.com"}
             actions = [parser.OFPActionOutput(2)]
 #            NetAssayMatchAction(datapath, match, action)
             self.NAMAs.append(NetAssayMatchAction(datapath, match, 
-                                                  actions, priority=10))
+                                                  actions, priority=0))
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
         ofproto = datapath.ofproto
