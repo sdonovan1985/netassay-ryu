@@ -156,12 +156,18 @@ class NetAssayMatchAction(object):
         self.ME = rma.lookup(self.match.keys()[0])
         self.MErule = self.ME.new_rule(self.match[self.match.keys()[0]],
                                        self.add_rule, self.remove_rule)
-#        self.MErule.register_callbacks(self.add_rule, self.remove_rule)
+
+        self.mcm.logger.info("Created NAMA on switch " + str(self.datapath.id) + " for: " + str(self.match))
 
     def __del__(self):
-        #TODO - This should clean up all the rules associated. 
-        pass
+        # Clean up all the outstanding rules before deletion.
+        self.mcm.logger.info("Deleting NAMA on switch "+ str(self.datapath.id) + " for: " + str(self.match))
+        for key in self.trackers.keys():
+            to_remove = self.trackers[key]
+            self.remove_match(to_remove)
 
+        
+    #TODO - This is for multiple included rules in a single NAMA. 
     def _get_MEs(self):
         me_list = []
         rma = RegisteredMatchActions()
@@ -170,12 +176,13 @@ class NetAssayMatchAction(object):
         
         return me_list
 
+    #TODO - This is for multiple included rules in a single NAMA. 
     def _create_ME_rules(self):
         #TODO: For each ME, create rule that they're responsible for.
         pass
     
+    #TODO - This is for multiple included rules in a single NAMA. 
     def _register_with_MEs(self):
-        #TODO: for multiple MEs in a single NAMA. Not used right now.
         for me in self.MEs:
             me.register_update_callback(self.update_callback)
 
@@ -183,7 +190,9 @@ class NetAssayMatchAction(object):
         # If it already exists, just increment count. No need to install
         # a new OF rule.
         matchval = kwargs
-#        print "add_rule: " + str(matchval)
+
+        self.mcm.logger.debug("For " + str(self.match) + "\n            add_rule: " + str(matchval))
+
         strval = str(matchval)
         if strval in self.trackers.keys():
             self.trackers[strval].count += 1
@@ -196,7 +205,9 @@ class NetAssayMatchAction(object):
     def remove_rule(self, **kwargs):
         # Make sure it exists
         matchval = kwargs
-#        print "remove_rule: " + str(matchval)
+
+        self.mcm.logger.debug("For " + str(self.match) + "\n            remove_rule: " + str(matchval))
+
         strval = str(matchval)
         if strval in self.trackers.keys():
             # If there are multiple instances of the same rule, slightly
@@ -219,8 +230,9 @@ class NetAssayMatchAction(object):
         cookie = self.mcm.get_cookie()
 
         parser = self.datapath.ofproto_parser
-#SPD        subaction = [parser.OFPActionOutput(2)]
         subaction = [parser.OFPInstructionWriteMetadata(self.vmac, 4095)]
+
+        self.mcm.logger.debug("create_match_tracking(" + str(match_kwargs))
         
         return match_tracking(match_kwargs,
                               self.postmatch,
@@ -236,12 +248,8 @@ class NetAssayMatchAction(object):
         parser = self.datapath.ofproto_parser
 
         match = parser.OFPMatch(**tracker.submatch)
-#        print "**** INSTALL_MATCH ****: " + str(match)
         actions = tracker.subactions
-
-#        match = parser.OFPMatch(eth_type=2048, ipv4_src='54.201.8.79', in_port=3)
-#        actions = [parser.OFPActionOutput(2)]
-
+ 
         cookie = tracker.cookie
         buffer_id = None
 
@@ -252,23 +260,13 @@ class NetAssayMatchAction(object):
         tracker.ofpmatch = match
         
 
-        # Push actions
-#        for a in actions:
-#            print str(a) + " " + str(type(a))
-        
         inst = actions
-#        [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
-#                                             actions),
-#                parser.OFPInstructionGotoTable(self.subtable)]
         inst.append(parser.OFPInstructionGotoTable(self.mcm.get_table()))
 
-
-        print "    NETASSAY"
-        print "Adding flow : switch   " + str(datapath.id)
-        print "            : priority " + str(priority)
-        print "            : match    " + str(match)
-        print "            : actions  " + str(actions)
-        
+        self.mcm.logger.debug("install_match : switch   " + str(datapath.id))
+        self.mcm.logger.debug("              : priority " + str(priority))
+        self.mcm.logger.debug("              : match    " + str(match))
+        self.mcm.logger.debug("              : actions  " + str(actions))
 
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
@@ -296,10 +294,11 @@ class NetAssayMatchAction(object):
         #TODO: Should this be in the match_tracking class?
         table = self.subtable
 
-#        print "Removing flow : switch  " + str(datapath.id)
-#        print "              : match   " + str(match)
-#        print "              : actions " + str(actions)
-
+        self.mcm.logger.debug("remove_match  : switch   " + str(datapath.id))
+        self.mcm.logger.debug("              : priority " + str(priority))
+        self.mcm.logger.debug("              : match    " + str(match))
+        self.mcm.logger.debug("              : actions  " + str(actions))
+        
         mod = parser.OFPFlowMod(datapath=datapath, cookie=cookie, 
                                 table_id=table, command=ofproto_v1_3.OFPFC_DELETE,
                                 out_group=ofproto_v1_3.OFPG_ANY, 
@@ -328,10 +327,6 @@ class NetAssayMatchAction(object):
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
                                              actions)]
 
-#        print "Adding flow : switch  " + str(datapath.id)
-#        print "            : match   " + str(match)
-#        print "            : actions " + str(actions)
-
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
@@ -357,10 +352,6 @@ class NetAssayMatchAction(object):
 
         #TODO: Should this be in the match_tracking class?
         table = self.mcmtable
-
-#        print "Removing flow : switch  " + str(datapath.id)
-#        print "              : match   " + str(match)
-#        print "              : actions " + str(actions)
 
         mod = parser.OFPFlowMod(datapath=datapath, cookie=cookie, 
                                 table_id=table, command=ofproto_v1_3.OFPFC_DELETE,

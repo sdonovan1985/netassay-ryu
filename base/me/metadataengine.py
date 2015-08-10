@@ -52,7 +52,7 @@ class MetadataEngine(object):
         By default, return identity, so that it can be ignored. returning drop
         could actually drop traffic.
         """
-#TODO
+#TODO - This is needed for getting DNS data from the switches directly.
         self.logger.info("get_forwarding_rules(): called")
         return identity
 
@@ -64,9 +64,8 @@ class MetadataEngine(object):
         version.
         """
         self.logger.info("new_rule(): called")
-        #TODO
         self.entries.append(self.entry_type(self.data_source, self, rule,
-        add_rule_cb, remove_rule_cb))
+                                            add_rule_cb, remove_rule_cb))
 
 
 

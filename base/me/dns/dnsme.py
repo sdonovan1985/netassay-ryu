@@ -35,6 +35,7 @@ class DNSMetadataEngine(MetadataEngine):
 
         # Register the different actions this ME can handle
         RegisteredMatchActions().register('domain', self)
+        #TODO - disabling class for now.
         #RegisteredMatchActions.register('class', matchClass)
 
     def __del__(self):
@@ -49,7 +50,9 @@ class DNSMetadataEngine(MetadataEngine):
         """
         This gets the forwarding rules that the DNS Classifier needs to work.
         """
-        #TODO
+        #TODO - This is necessary for getting DNS data that is passing through 
+        # the switches. Currently disabled on the Ryu version as I don't know 
+        # how to implement  forward-to-controller-and-forward-normally-too.
         self.logger.info("DNSMetadataEngine.get_forwarding_rules(): called")
         dnspkts = packets(None, ['srcmac'])
         self.offset = 42 #FIXME! THIS ONLY WORKS WITH IPv4
@@ -60,11 +63,9 @@ class DNSMetadataEngine(MetadataEngine):
 
         return dns_inbound + dns_outbound
 
-    #TODO
     def _dns_parse_cb(self, pkt):
         self.logger.info("DNSMetadataEngine._dns_parse_cb(): called")
         self.data_source.parse_new_DNS(pkt['raw'][self.offset:])
-        #self.data_source.print_entries()
 
     def _install_new_rule(self, domain, ipaddr):
         self.data_source._install_new_rule(domain, ipaddr)
@@ -124,8 +125,6 @@ class DNSMetadataEntry(MetadataEntry):
                 new_active_results.append(addr)
                 if addr not in self._active_results:
                     print "adding addr: " + str(addr)
-#                    self.add_rule_cb(ipv4_src=str(addr), eth_type=ether.ETH_TYPE_IP, in_port=3)
-#                    self.add_rule_cb(ipv4_dst=str(addr), eth_type=ether.ETH_TYPE_IP, in_port=3)
                     self.add_rule_cb(ipv4_src=str(addr), eth_type=ether.ETH_TYPE_IP)
                     self.add_rule_cb(ipv4_dst=str(addr), eth_type=ether.ETH_TYPE_IP)
 
@@ -141,32 +140,3 @@ class DNSMetadataEntry(MetadataEntry):
             self._active_timer.start()
             self._active_results = []
         
-
-#--------------------------------------
-# NetAssayMatch subclasses
-#--------------------------------------
-
-#TODO - is this necessary?
-#class matchURL(NetAssayMatch):
-class matchURL(object):
-    """
-    matches IPs related to the specified URL.
-    """
-    def __init__(self, url, matchaction):
-        logging.getLogger('netassay.matchURL').info("matchURL.__init__(): called")
-        metadata_engine = DNSMetadataEngine.get_instance()
-        ruletype = AssayRule.DNS_NAME
-        rulevalue = url
-        super(matchURL, self).__init__(metadata_engine, ruletype, rulevalue, matchaction)
-
-#class matchClass(NetAssayMatch):
-class matchClass(object):
-    """
-    matches IPs related to the specified class of URLs.
-    """
-    def __init__(self, classification, matchaction):
-        logging.getLogger('netassay.matchClass').info("matchURL.__init__(): called")
-        metadata_engine = DNSMetadataEngine.get_instance()
-        ruletype = AssayRule.CLASSIFICATION
-        rulevalue = classification
-        super(matchClass, self).__init__(metadata_engine, ruletype, rulevalue, matchaction)
